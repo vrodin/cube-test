@@ -59,6 +59,8 @@ private:
      */
     void createModels();
 
+    void changeSpeed();
+
     android_app *app_;
     EGLDisplay display_;
     EGLSurface surface_;

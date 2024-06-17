@@ -69,12 +69,22 @@ void Renderer::render() {
 
             glm::mat4 result = projectionMatrix * view * model;
             shader_->drawFigure(figure, result);
+            changeSpeed();
         }
     }
 
     // Present the rendered image. This is an implicit glFlush.
     auto swapResult = eglSwapBuffers(display_, surface_);
     assert(swapResult == EGL_TRUE);
+}
+
+void Renderer::changeSpeed() {
+    if(movementSpeed_ > 0) {
+        movementSpeed_ = movementSpeed_ - 0.1 > 0 ? movementSpeed_ - 0.1 : 0;
+    }
+    if(movementSpeed_ < 0) {
+        movementSpeed_ = movementSpeed_ + 0.1 < 0 ? movementSpeed_ + 0.1 : 0;
+    }
 }
 
 void Renderer::initRenderer() {
