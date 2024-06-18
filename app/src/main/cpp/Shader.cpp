@@ -1,26 +1,17 @@
 #include "Shader.h"
 
 #include "AndroidOut.h"
-#include "Cube.h"
-#include <glm/glm.hpp>
 
-Shader *Shader::loadShader(
-        const std::string &vertexSource,
-        const std::string &fragmentSource,
-        const std::string &positionAttributeName,
-        const std::string &uvAttributeName,
-        const std::string &projectionModelMatrixUniformName) {
-    Shader *shader = nullptr;
-
-    GLuint vertexShader = loadShader(GL_VERTEX_SHADER, vertexSource);
+Shader::Shader(AAssetManager *assetManager, const std::string &vertexPath,const std::string &fragmentPath) {
+    GLuint vertexShader = loadShader(GL_VERTEX_SHADER, loadFile(assetManager,vertexPath));
     if (!vertexShader) {
-        return nullptr;
+        return;
     }
 
-    GLuint fragmentShader = loadShader(GL_FRAGMENT_SHADER, fragmentSource);
+    GLuint fragmentShader = loadShader(GL_FRAGMENT_SHADER, loadFile(assetManager,fragmentPath));
     if (!fragmentShader) {
         glDeleteShader(vertexShader);
-        return nullptr;
+        return;
     }
 
     GLuint program = glCreateProgram();
@@ -32,47 +23,14 @@ Shader *Shader::loadShader(
         GLint linkStatus = GL_FALSE;
         glGetProgramiv(program, GL_LINK_STATUS, &linkStatus);
         if (linkStatus != GL_TRUE) {
-            GLint logLength = 0;
-            glGetProgramiv(program, GL_INFO_LOG_LENGTH, &logLength);
-
-            // If we fail to link the shader program, log the result for debugging
-            if (logLength) {
-                GLchar *log = new GLchar[logLength];
-                glGetProgramInfoLog(program, logLength, nullptr, log);
-                aout << "Failed to link program with:\n" << log << std::endl;
-                delete[] log;
-            }
-
             glDeleteProgram(program);
         } else {
-            // Get the attribute and uniform locations by name. You may also choose to hardcode
-            // indices with layout= in your shader, but it is not done in this sample
-            GLint positionAttribute = glGetAttribLocation(program, positionAttributeName.c_str());
-            GLint uvAttribute = glGetAttribLocation(program, uvAttributeName.c_str());
-            GLint projectionMatrixUniform = glGetUniformLocation(program,projectionModelMatrixUniformName.c_str());
-
-            // Only create a new shader if all the attributes are found.
-            if (positionAttribute != -1
-                && uvAttribute != -1
-                && projectionMatrixUniform != -1
-                ) {
-
-                shader = new Shader(
-                        program,
-                        positionAttribute,
-                        uvAttribute,
-                        projectionMatrixUniform);
-            } else {
-                glDeleteProgram(program);
-            }
+            program_ = program;
         }
     }
 
-    // The shaders are no longer needed once the program is linked. Release their memory.
     glDeleteShader(vertexShader);
     glDeleteShader(fragmentShader);
-
-    return shader;
 }
 
 GLuint Shader::loadShader(GLenum shaderType, const std::string &shaderSource) {
@@ -105,33 +63,24 @@ GLuint Shader::loadShader(GLenum shaderType, const std::string &shaderSource) {
     return shader;
 }
 
+std::string Shader::loadFile(AAssetManager *assetManager, const std::string fileName) {
+    auto shaderAsset = AAssetManager_open(
+            assetManager,
+            fileName.c_str(),
+            AASSET_MODE_BUFFER);
+    off_t file_size = AAsset_getLength(shaderAsset);
+    std::string file_buffer;
+    file_buffer.resize(file_size);
+    AAsset_read(shaderAsset, &file_buffer.front(), file_size);
+    AAsset_close(shaderAsset);
+
+    return file_buffer;
+}
+
 void Shader::activate() const {
     glUseProgram(program_);
 }
 
 void Shader::deactivate() const {
     glUseProgram(0);
-}
-
-
-void Shader::drawFigure(const Cube &cube, glm::mat4 result) const {
-
-    glUniformMatrix4fv(projection_, 1, GL_FALSE, glm::value_ptr(result));
-
-    glBindBuffer(GL_ARRAY_BUFFER, cube.getVBOs()[0]);
-    glVertexAttribPointer(position_, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), 0);
-    glEnableVertexAttribArray(position_);
-
-    glBindBuffer(GL_ARRAY_BUFFER, cube.getVBOs()[1]);
-    glVertexAttribPointer(uv_, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), 0);
-    glEnableVertexAttribArray(uv_);
-
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, cube.getTexture().getTextureID());
-
-    glBindVertexArray(cube.getVAO());
-    glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_SHORT, NULL);
-
-    glDisableVertexAttribArray(position_);
-    glDisableVertexAttribArray(uv_);
 }

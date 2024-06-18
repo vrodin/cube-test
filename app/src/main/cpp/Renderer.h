@@ -71,7 +71,8 @@ private:
 
     bool shaderNeedsNewProjectionMatrix_;
 
-    std::unique_ptr<Shader> shader_;
+    std::unique_ptr<Shader> cubeShader_;
+    std::unique_ptr<Shader> lightShader_;
     std::vector<Cube> figures_;
 };
 

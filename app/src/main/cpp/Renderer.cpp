@@ -2,42 +2,13 @@
 
 #include <game-activity/native_app_glue/android_native_app_glue.h>
 #include <glm/glm.hpp>
+#include <glm/gtc/type_ptr.hpp>
 #include <vector>
 #include <android/imagedecoder.h>
 
 #include "AndroidOut.h"
 #include "Shader.h"
 #include "TextureAsset.h"
-
-// Vertex shader, you'd typically load this from assets
-static const char *vertex = R"vertex(#version 300 es
-layout (location = 0) in vec3 position;
-layout (location = 1) in vec2 inUV;
-
-out vec2 fragUV;
-
-uniform mat4 projection;
-
-void main() {
-    gl_Position = projection * vec4(position, 1.0f);
-    fragUV = vec2(inUV.x, inUV.y);
-}
-)vertex";
-
-// Fragment shader, you'd typically load this from assets
-static const char *fragment = R"fragment(#version 300 es
-precision mediump float;
-in vec2 fragUV;
-
-out vec4 color;
-
-uniform sampler2D texture1;
-
-void main()
-{
-    color = texture(texture1, fragUV);
-}
-)fragment";
 
 Renderer::~Renderer() {
     if (display_ != EGL_NO_DISPLAY) {
@@ -60,15 +31,16 @@ void Renderer::render() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     if (!figures_.empty()) {
-        shader_->activate();
+
         for (const auto &figure: figures_) {
+            cubeShader_->activate();
             glm::mat4 projectionMatrix = glm::perspective(glm::radians(60.f), (float)width_ / (float)height_, 0.1f, 100.0f);
             glm::mat4 view = glm::lookAt(glm::vec3(10.0f, 10.0f, 10.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
             glm::mat4 model = glm::translate(glm::mat4(1.f), glm::vec3( 0.0f,  0.0f,  0.0f));
             model = glm::rotate(model, movementSpeed_ * 10.0f, glm::vec3(0.0f, 10.0f, 0.0f));
 
             glm::mat4 result = projectionMatrix * view * model;
-            shader_->drawFigure(figure, result);
+            //shader_->drawFigure(figure, result);
             changeSpeed();
         }
     }
@@ -149,16 +121,18 @@ void Renderer::initRenderer() {
     width_ = -1;
     height_ = -1;
 
-    shader_ = std::unique_ptr<Shader>(
-            Shader::loadShader(vertex, fragment, "position", "inUV", "projection"));
-    assert(shader_);
+    cubeShader_ = std::unique_ptr<Shader>(new Shader(app_->activity->assetManager,"cube_shader.vs", "cube_shader.frag"));
+    assert(cubeShader_);
+
+    lightShader_ = std::unique_ptr<Shader>(new Shader(app_->activity->assetManager, "lamp_shader.vs", "lamp_shader.frag"));
+    assert(lightShader_);
 
     // setup any other gl related global states
     glClearColor(1.0f,1.0f,1.0f,1.0f);
 
     // enable alpha globally for now, you probably don't want to do this in a game
     glEnable(GL_DEPTH_TEST);
-    glDepthFunc(GL_LEQUAL);
+    glDepthFunc(GL_LESS);
 
     // get some demo models into memory
     createModels();
@@ -183,53 +157,78 @@ void Renderer::updateRenderArea() {
 
 void Renderer::createModels() {
 
-    static const float s = 1.0f;
-    static const float cubePositions[36][3] = {
-            {-s, s, s}, { s, s, s}, { s,-s, s}, {-s,-s, s}, // front
-            { s, s,-s}, {-s, s,-s}, {-s,-s,-s}, { s,-s,-s}, // back
-            {-s, s,-s}, { s, s,-s}, { s, s, s}, {-s, s, s}, // top
-            { s,-s,-s}, {-s,-s,-s}, {-s,-s, s}, { s,-s, s}, // bottom
-            {-s, s,-s}, {-s, s, s}, {-s,-s, s}, {-s,-s,-s}, // left
-            { s, s, s}, { s, s,-s}, { s,-s,-s}, { s,-s, s}  // right
+    GLfloat vertices[] = {
+            -0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
+            0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
+            0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
+            0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
+            -0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
+            -0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
+
+            -0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
+            0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
+            0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
+            0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
+            -0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
+            -0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
+
+            -0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
+            -0.5f,  0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
+            -0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
+            -0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
+            -0.5f, -0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
+            -0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
+
+            0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
+            0.5f,  0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
+            0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
+            0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
+            0.5f, -0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
+            0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
+
+            -0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
+            0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
+            0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
+            0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
+            -0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
+            -0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
+
+            -0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,
+            0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,
+            0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
+            0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
+            -0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
+            -0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f
     };
+    // First, set the container's VAO (and VBO)
+    GLuint VBO, containerVAO;
+    glGenVertexArrays(1, &containerVAO);
+    glGenBuffers(1, &VBO);
 
-    static const float cubeTexcoords[24][2] = {
-            {0.0f,1.0f}, {1.0f,1.0f}, {1.0f,0.0f}, {0.0f,0.0f}, // front
-            {0.0f,1.0f}, {1.0f,1.0f}, {1.0f,0.0f}, {0.0f,0.0f}, // back
-            {0.0f,1.0f}, {1.0f,1.0f}, {1.0f,0.0f}, {0.0f,0.0f}, // top
-            {0.0f,1.0f}, {1.0f,1.0f}, {1.0f,0.0f}, {0.0f,0.0f}, // bottom
-            {0.0f,1.0f}, {1.0f,1.0f}, {1.0f,0.0f}, {0.0f,0.0f}, // left
-            {0.0f,1.0f}, {1.0f,1.0f}, {1.0f,0.0f}, {0.0f,0.0f}  // right
-    };
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
-    static const uint16_t cubeIndices[36] = {
-            0, 3, 1,  1, 3, 2, // front
-            4, 7, 5,  5, 7, 6, // back
-            8,11, 9,  9,11,10, // top
-            12,15,13, 13,15,14, // bottom
-            16,19,17, 17,19,18, // left
-            20,23,21, 21,23,22  // right
-    };
-    auto assetManager = app_->activity->assetManager;
-    auto spAndroidRobotTexture = TextureAsset::loadAsset(assetManager, "b2s_upscaled.png");
+    glBindVertexArray(containerVAO);
+    // Position attribute
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(GLfloat), (GLvoid*)0);
+    glEnableVertexAttribArray(0);
+    // Normal attribute
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(GLfloat), (GLvoid*)(3 * sizeof(GLfloat)));
+    glEnableVertexAttribArray(1);
+    glBindVertexArray(0);
 
-    GLuint m_vertexArray;
-    GLuint m_vertexBuffer[3];
-    glGenVertexArrays(1, &m_vertexArray);
-    glBindVertexArray(m_vertexArray);
+    // Then, we set the light's VAO (VBO stays the same. After all, the vertices are the same for the light object (also a 3D cube))
+    GLuint lightVAO;
+    glGenVertexArrays(1, &lightVAO);
+    glBindVertexArray(lightVAO);
+    // We only need to bind to the VBO (to link it with glVertexAttribPointer), no need to fill it; the VBO's data already contains all we need.
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    // Set the vertex attributes (only position data for the lamp))
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(GLfloat), (GLvoid*)0); // Note that we skip over the normal vectors
+    glEnableVertexAttribArray(0);
+    glBindVertexArray(0);
 
-    glGenBuffers(3, m_vertexBuffer);
-
-    glBindBuffer(GL_ARRAY_BUFFER, m_vertexBuffer[0]);
-    glBufferData(GL_ARRAY_BUFFER, 24 * (3 * sizeof(float)), cubePositions, GL_DYNAMIC_DRAW);
-
-    glBindBuffer(GL_ARRAY_BUFFER, m_vertexBuffer[1]);
-    glBufferData(GL_ARRAY_BUFFER, 24 * (2 * sizeof(float)),cubeTexcoords, GL_DYNAMIC_DRAW);
-
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_vertexBuffer[2]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, 36,cubeIndices, GL_DYNAMIC_DRAW);
-
-    figures_.emplace_back(spAndroidRobotTexture, m_vertexArray, std::vector<GLuint> (m_vertexBuffer, m_vertexBuffer + 3));
+    //figures_.emplace_back(spAndroidRobotTexture, m_vertexArray, std::vector<GLuint> (m_vertexBuffer, m_vertexBuffer + 3));
 
 }
 
