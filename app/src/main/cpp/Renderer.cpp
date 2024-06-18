@@ -249,11 +249,13 @@ void Renderer::createModels() {
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
     glBindVertexArray(containerVAO);
+    GLint attribLocation = glGetAttribLocation(cubeShader_->getProgram(),"position");
     // Position attribute
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(GLfloat), (GLvoid*)0);
+    glVertexAttribPointer(attribLocation, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(GLfloat), (GLvoid*)0);
     glEnableVertexAttribArray(0);
     // Normal attribute
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(GLfloat), (GLvoid*)(3 * sizeof(GLfloat)));
+    attribLocation = glGetAttribLocation(cubeShader_->getProgram(),"normal");
+    glVertexAttribPointer(attribLocation, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(GLfloat), (GLvoid*)(3 * sizeof(GLfloat)));
     glEnableVertexAttribArray(1);
     cube_ = std::unique_ptr<Model>(new Model(containerVAO, VBO));
     glBindVertexArray(0);
@@ -264,8 +266,9 @@ void Renderer::createModels() {
     glBindVertexArray(lightVAO);
     // We only need to bind to the VBO (to link it with glVertexAttribPointer), no need to fill it; the VBO's data already contains all we need.
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    attribLocation = glGetAttribLocation(lightShader_->getProgram(),"position");
     // Set the vertex attributes (only position data for the lamp))
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(GLfloat), (GLvoid*)0); // Note that we skip over the normal vectors
+    glVertexAttribPointer(attribLocation, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(GLfloat), (GLvoid*)0); // Note that we skip over the normal vectors
     glEnableVertexAttribArray(0);
     lamp_ = std::unique_ptr<Model>(new Model(containerVAO, VBO));
     glBindVertexArray(0);
