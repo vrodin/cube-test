@@ -5,7 +5,7 @@
 #include <GLES3/gl3.h>
 #include <android/asset_manager.h>
 
-class Cube;
+class Model;
 
 /*!
  * A class representing a simple shader program. It consists of vertex and fragment components. The
@@ -28,6 +28,8 @@ public:
     void activate() const;
 
     void deactivate() const;
+
+    GLuint getProgram() const;
 
 private:
     static GLuint loadShader(GLenum shaderType, const std::string &shaderSource);

@@ -84,3 +84,7 @@ void Shader::activate() const {
 void Shader::deactivate() const {
     glUseProgram(0);
 }
+
+GLuint Shader::getProgram() const {
+    return program_;
+}

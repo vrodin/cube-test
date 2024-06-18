@@ -3,8 +3,11 @@
 
 #include <EGL/egl.h>
 #include <memory>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
-#include "Cube.h"
+#include "Model.h"
 #include "Shader.h"
 
 struct android_app;
@@ -73,7 +76,11 @@ private:
 
     std::unique_ptr<Shader> cubeShader_;
     std::unique_ptr<Shader> lightShader_;
-    std::vector<Cube> figures_;
+    std::unique_ptr<Model> cube_;
+    std::unique_ptr<Model> lamp_;
+
+    glm::vec3 lightPos = glm::vec3(1.2f, 1.0f, 2.0f);
+    glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);
 };
 
 #endif //ANDROIDGLINVESTIGATIONS_RENDERER_H

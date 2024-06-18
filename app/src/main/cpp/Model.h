@@ -5,34 +5,36 @@
 #include "TextureAsset.h"
 #include <glm/glm.hpp>
 
-class Cube {
+class Model {
 public:
-    inline Cube(
-            std::shared_ptr<TextureAsset> spTexture,
+    inline Model(
             GLuint vertexArray,
-            std::vector<GLuint> vertexBuffers
+            GLuint vertexBuffers
             )
-            : spTexture_(std::move(spTexture)),
-              vertexArray_(std::move(vertexArray)),
+            : vertexArray_(std::move(vertexArray)),
               vertexBuffers_(std::move(vertexBuffers)) {}
 
     inline const TextureAsset &getTexture() const {
         return *spTexture_;
     }
 
+    inline const TextureAsset setTexture(TextureAsset *spTexture) {
+        spTexture_ = std::shared_ptr<TextureAsset>(spTexture);
+    }
+
     inline const GLuint getVAO() const {
         return vertexArray_;
     }
 
-    inline const GLuint* getVBOs() const {
-        return vertexBuffers_.data();
+    inline const GLuint getVBOs() const {
+        return vertexBuffers_;
     }
 
 
 private:
     std::shared_ptr<TextureAsset> spTexture_;
     GLuint vertexArray_;
-    std::vector<GLuint> vertexBuffers_;
+    GLuint vertexBuffers_;
 };
 
 #endif //ANDROIDGLINVESTIGATIONS_MODEL_H

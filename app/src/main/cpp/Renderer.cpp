@@ -2,7 +2,7 @@
 
 #include <game-activity/native_app_glue/android_native_app_glue.h>
 #include <glm/glm.hpp>
-#include <glm/gtc/type_ptr.hpp>
+
 #include <vector>
 #include <android/imagedecoder.h>
 
@@ -30,21 +30,61 @@ void Renderer::render() {
     updateRenderArea();
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    if (!figures_.empty()) {
+    glm::mat4 view;
+    view = glm::lookAt(glm::vec3(0.0f, 0.0f, 3.0f),
+                       glm::vec3(0.0f, 0.0f, 0.0f),
+                       glm::vec3(0.0f, 1.0f, 0.0f));
+    glm::mat4 projection = glm::perspective(glm::radians(60.0f),(GLfloat)width_ / (GLfloat)height_, 0.1f, 100.0f);
 
-        for (const auto &figure: figures_) {
-            cubeShader_->activate();
-            glm::mat4 projectionMatrix = glm::perspective(glm::radians(60.f), (float)width_ / (float)height_, 0.1f, 100.0f);
-            glm::mat4 view = glm::lookAt(glm::vec3(10.0f, 10.0f, 10.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-            glm::mat4 model = glm::translate(glm::mat4(1.f), glm::vec3( 0.0f,  0.0f,  0.0f));
-            model = glm::rotate(model, movementSpeed_ * 10.0f, glm::vec3(0.0f, 10.0f, 0.0f));
+    if (cube_ != nullptr) {
+        cubeShader_->activate();
+        GLint objectColorLoc = glGetUniformLocation(cubeShader_->getProgram(), "objectColor");
+        GLint lightColorLoc  = glGetUniformLocation(cubeShader_->getProgram(), "lightColor");
+        GLint lightPosLoc    = glGetUniformLocation(cubeShader_->getProgram(), "lightPos");
+        GLint viewPosLoc     = glGetUniformLocation(cubeShader_->getProgram(), "viewPos");
+        glUniform3f(objectColorLoc, 1.0f, 0.5f, 0.31f);
+        glUniform3f(lightColorLoc,  1.0f, 1.0f, 1.0f);
+        glUniform3f(lightPosLoc,    lightPos.x, lightPos.y, lightPos.z);
+        glUniform3f(viewPosLoc,     cameraPos.x, cameraPos.y, cameraPos.z);
 
-            glm::mat4 result = projectionMatrix * view * model;
-            //shader_->drawFigure(figure, result);
-            changeSpeed();
-        }
+        // Create camera transformations
+
+        // Get the uniform locations
+        GLint modelLoc = glGetUniformLocation(cubeShader_->getProgram(), "model");
+        GLint viewLoc  = glGetUniformLocation(cubeShader_->getProgram(),  "view");
+        GLint projLoc  = glGetUniformLocation(cubeShader_->getProgram(),  "projection");
+        // Pass the matrices to the shader
+        glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
+        glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
+
+        // Draw the container (using container's vertex attributes)
+        glBindVertexArray(cube_->getVAO());
+        glm::mat4 model;
+        model = glm::rotate(model, movementSpeed_ * 10.0f, glm::vec3(0.0f, 10.0f, 0.0f));
+        glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+        glDrawArrays(GL_TRIANGLES, 0, 36);
+        glBindVertexArray(0);
     }
 
+    if(lamp_ != nullptr) {
+        lightShader_->activate();
+        // Get location objects for the matrices on the lamp shader (these could be different on a different shader)
+        GLint modelLoc = glGetUniformLocation(lightShader_->getProgram(), "model");
+        GLint viewLoc  = glGetUniformLocation(lightShader_->getProgram(), "view");
+        GLint projLoc  = glGetUniformLocation(lightShader_->getProgram(), "projection");
+        // Set matrices
+        glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
+        glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
+        glm::mat4 model = glm::mat4();
+        model = glm::translate(model, lightPos);
+        model = glm::scale(model, glm::vec3(0.2f)); // Make it a smaller cube
+        glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+        // Draw the light object (using light's vertex attributes)
+        glBindVertexArray(lamp_->getVAO());
+        glDrawArrays(GL_TRIANGLES, 0, 36);
+        glBindVertexArray(0);
+    }
+    changeSpeed();
     // Present the rendered image. This is an implicit glFlush.
     auto swapResult = eglSwapBuffers(display_, surface_);
     assert(swapResult == EGL_TRUE);
@@ -128,7 +168,7 @@ void Renderer::initRenderer() {
     assert(lightShader_);
 
     // setup any other gl related global states
-    glClearColor(1.0f,1.0f,1.0f,1.0f);
+    glClearColor(.2f,.2f,.2f,1.0f);
 
     // enable alpha globally for now, you probably don't want to do this in a game
     glEnable(GL_DEPTH_TEST);
@@ -215,6 +255,7 @@ void Renderer::createModels() {
     // Normal attribute
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(GLfloat), (GLvoid*)(3 * sizeof(GLfloat)));
     glEnableVertexAttribArray(1);
+    cube_ = std::unique_ptr<Model>(new Model(containerVAO, VBO));
     glBindVertexArray(0);
 
     // Then, we set the light's VAO (VBO stays the same. After all, the vertices are the same for the light object (also a 3D cube))
@@ -226,10 +267,8 @@ void Renderer::createModels() {
     // Set the vertex attributes (only position data for the lamp))
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(GLfloat), (GLvoid*)0); // Note that we skip over the normal vectors
     glEnableVertexAttribArray(0);
+    lamp_ = std::unique_ptr<Model>(new Model(containerVAO, VBO));
     glBindVertexArray(0);
-
-    //figures_.emplace_back(spAndroidRobotTexture, m_vertexArray, std::vector<GLuint> (m_vertexBuffer, m_vertexBuffer + 3));
-
 }
 
 void Renderer::handleInput() {
